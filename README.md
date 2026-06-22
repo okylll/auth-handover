@@ -19,7 +19,7 @@
 5. 输入 `$` 并选择 `Skill Auth`。
 6. 开始提问。
 
-完整说明见：[Codex 进阶查询使用手册](docs/CODEX-USER-GUIDE.md)。
+完整说明见：[Codex 进阶查询使用手册](codex-guide.html)。
 
 ## 文件结构
 
@@ -29,6 +29,8 @@
 ├── styles.css   # 响应式样式
 ├── data.js      # 自动生成的公开数据
 ├── app.js       # 搜索、筛选和结果渲染
+├── codex-guide.html # Codex 使用手册渲染页
+├── guide.js     # Markdown 手册基础渲染
 ├── docs/
 │   └── CODEX-USER-GUIDE.md # Codex 进阶查询使用手册
 ├── .agents/
