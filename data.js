@@ -487,6 +487,7 @@ window.AUTH_HANDOVER_DATA = {
     {
       "id": "PAGE-001",
       "name": "‼️共用框架优化",
+      "directory": "用户流程串联",
       "type": "共用规则",
       "keywords": [
         "共用框架",
@@ -507,11 +508,13 @@ window.AUTH_HANDOVER_DATA = {
         "保存时的恢复权限和限制权限提示"
       ],
       "status": "当前有效的共用规则",
+      "pixsoPosition": "用户流程串联 / ‼️共用框架优化",
       "pixsoUrl": "https://pixso.hikvision.com.cn/app/design/mxLqgO8U5BHKzbCyGeSjkg?page-id=4612:60345"
     },
     {
       "id": "PAGE-002",
       "name": "创建编辑用户",
+      "directory": "用户流程串联",
       "type": "核心流程",
       "keywords": [
         "创建用户",
@@ -533,11 +536,13 @@ window.AUTH_HANDOVER_DATA = {
         "切换页面时的未保存提示"
       ],
       "status": "当前采用",
+      "pixsoPosition": "用户流程串联 / 创建编辑用户",
       "pixsoUrl": "https://pixso.hikvision.com.cn/app/design/mxLqgO8U5BHKzbCyGeSjkg?page-id=3508:133228"
     },
     {
       "id": "PAGE-003",
       "name": "创建编辑用户-超级管理员",
+      "directory": "用户流程串联",
       "type": "特殊分支",
       "keywords": [
         "超级管理员",
@@ -554,11 +559,13 @@ window.AUTH_HANDOVER_DATA = {
         "审计页面展示全部有权限"
       ],
       "status": "当前采用",
+      "pixsoPosition": "用户流程串联 / 创建编辑用户-超级管理员",
       "pixsoUrl": "https://pixso.hikvision.com.cn/app/design/mxLqgO8U5BHKzbCyGeSjkg?page-id=4425:149325"
     },
     {
       "id": "PAGE-004",
       "name": "配置用户权限",
+      "directory": "用户流程串联",
       "type": "核心流程",
       "keywords": [
         "配置用户权限",
@@ -589,11 +596,13 @@ window.AUTH_HANDOVER_DATA = {
         "从其他用户复制权限"
       ],
       "status": "当前采用",
+      "pixsoPosition": "用户流程串联 / 配置用户权限",
       "pixsoUrl": "https://pixso.hikvision.com.cn/app/design/mxLqgO8U5BHKzbCyGeSjkg?page-id=3060:84780"
     },
     {
       "id": "PAGE-005",
       "name": "用户权限审计",
+      "directory": "用户流程串联",
       "type": "核心流程",
       "keywords": [
         "权限审计",
@@ -616,11 +625,13 @@ window.AUTH_HANDOVER_DATA = {
         "跳转到完整权限配置页"
       ],
       "status": "以最后评审意见为准",
+      "pixsoPosition": "用户流程串联 / 用户权限审计",
       "pixsoUrl": "https://pixso.hikvision.com.cn/app/design/mxLqgO8U5BHKzbCyGeSjkg?page-id=3508:152466"
     },
     {
       "id": "PAGE-006",
       "name": "角色流程串联",
+      "directory": "根目录",
       "type": "核心流程",
       "keywords": [
         "角色管理",
@@ -641,11 +652,13 @@ window.AUTH_HANDOVER_DATA = {
         "回收直接配置给角色的权限"
       ],
       "status": "当前采用",
+      "pixsoPosition": "角色流程串联",
       "pixsoUrl": "https://pixso.hikvision.com.cn/app/design/mxLqgO8U5BHKzbCyGeSjkg?page-id=3112:111474"
     },
     {
       "id": "PAGE-007",
       "name": "用户组流程串联",
+      "directory": "根目录",
       "type": "核心流程",
       "keywords": [
         "用户组管理",
@@ -664,6 +677,7 @@ window.AUTH_HANDOVER_DATA = {
         "回收直接配置给用户组的权限"
       ],
       "status": "当前采用",
+      "pixsoPosition": "用户组流程串联",
       "pixsoUrl": "https://pixso.hikvision.com.cn/app/design/mxLqgO8U5BHKzbCyGeSjkg?page-id=3112:99867"
     }
   ],

@@ -147,7 +147,8 @@ h1 {
 
 #clearSearch,
 .tab,
-.pixso-link {
+.pixso-link,
+.advanced-actions a {
   min-height: 40px;
   border-radius: 6px;
   cursor: pointer;
@@ -324,6 +325,60 @@ h1 {
   font-weight: 800;
 }
 
+.advanced-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  margin-top: 28px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.advanced-panel h2 {
+  margin-bottom: 4px;
+  font-size: 20px;
+}
+
+.advanced-panel p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.advanced-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.advanced-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid var(--accent);
+  color: var(--accent-dark);
+  background: #ffffff;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.advanced-actions a:first-child {
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.advanced-actions a:hover {
+  background: var(--accent-soft);
+}
+
+.advanced-actions a:first-child:hover {
+  background: var(--accent-dark);
+}
+
 .site-footer {
   padding: 22px 0;
   border-top: 1px solid var(--line);
@@ -387,5 +442,18 @@ h1 {
 
   .badge {
     width: fit-content;
+  }
+
+  .advanced-panel {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .advanced-actions {
+    justify-content: stretch;
+  }
+
+  .advanced-actions a {
+    width: 100%;
   }
 }
