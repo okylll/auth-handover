@@ -37,38 +37,64 @@
             <strong id="ruleCount">0</strong>
             <span>已有规则</span>
           </div>
-          <div>
-            <strong id="pendingCount">0</strong>
-            <span>待确认事项</span>
-          </div>
         </div>
       </div>
     </header>
 
     <main class="wrap main">
       <section class="search-panel" aria-labelledby="searchTitle">
-        <h2 id="searchTitle">查询交接知识</h2>
+        <h2 id="searchTitle">快速查询</h2>
         <div class="search-row">
-          <label class="visually-hidden" for="searchInput">搜索</label>
-          <input id="searchInput" type="search" placeholder="输入权限问题、流程名称或关键词" autocomplete="off">
-          <button id="clearSearch" type="button">清空</button>
+          <div class="search-input-wrap">
+            <label class="visually-hidden" for="searchInput">搜索</label>
+            <input id="searchInput" type="text" placeholder="输入权限问题、流程名称或关键词" autocomplete="off">
+            <button id="clearSearch" class="input-clear" type="button" aria-label="清空搜索" hidden>×</button>
+          </div>
         </div>
       </section>
 
-      <nav class="tabs" aria-label="内容分类">
-        <button class="tab is-active" type="button" data-view="pages">流程及设计地址</button>
-        <button class="tab" type="button" data-view="rules">已确认</button>
-        <button class="tab" type="button" data-view="pending">待确认</button>
-      </nav>
-
-      <section class="result-head" aria-live="polite">
-        <div>
-          <h2 id="resultTitle">全部权限规则</h2>
-          <p id="resultMeta">展示已确认的权限问答。</p>
-        </div>
+      <section class="search-results-block" id="searchResultsBlock" hidden>
+        <h2 id="searchResultsTitle">查询结果 0条</h2>
+        <section id="searchResults" class="results" aria-label="查询结果"></section>
       </section>
 
-      <section id="results" class="results" aria-label="查询结果"></section>
+      <section class="overview-section" id="overviewSection">
+        <section class="result-head" aria-live="polite">
+          <div>
+            <h2 id="resultTitle">索引与逻辑概览</h2>
+            <p id="resultMeta"></p>
+          </div>
+          <button id="overviewToggle" class="overview-toggle" type="button" aria-expanded="false" aria-label="展开索引与逻辑概览">
+            <span class="chevron" aria-hidden="true"></span>
+          </button>
+        </section>
+
+        <div id="overviewBody">
+          <nav class="tabs primary-tabs" aria-label="内容分类">
+            <button class="tab is-active" type="button" data-view="pages">
+              <span class="tab-label">设计稿索引</span>
+              <span class="tab-count" data-count-for="pages">0</span>
+            </button>
+            <button class="tab" type="button" data-view="rules-overview">
+              <span class="tab-label">规则概览</span>
+              <span class="tab-count" data-count-for="rules-overview">0</span>
+            </button>
+          </nav>
+
+          <nav class="tabs secondary-tabs" id="ruleSubtabs" aria-label="规则分类">
+            <button class="tab is-active" type="button" data-rule-view="rules">
+              <span class="tab-label">已确定</span>
+              <span class="tab-count" data-count-for="rules">0</span>
+            </button>
+            <button class="tab" type="button" data-rule-view="pending">
+              <span class="tab-label">待确定</span>
+              <span class="tab-count" data-count-for="pending">0</span>
+            </button>
+          </nav>
+
+          <section id="results" class="results" aria-label="索引与逻辑概览内容"></section>
+        </div>
+      </section>
     </main>
 
     <footer class="site-footer">

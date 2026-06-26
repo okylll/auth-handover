@@ -4,18 +4,27 @@
   var data = window.AUTH_HANDOVER_DATA;
   var state = {
     view: "pages",
-    query: ""
+    query: "",
+    overviewExpanded: false
   };
 
   var els = {
     searchInput: document.getElementById("searchInput"),
     clearSearch: document.getElementById("clearSearch"),
-    tabs: Array.prototype.slice.call(document.querySelectorAll(".tab")),
+    tabs: Array.prototype.slice.call(document.querySelectorAll(".primary-tabs .tab")),
+    ruleTabs: Array.prototype.slice.call(document.querySelectorAll(".secondary-tabs .tab")),
+    ruleSubtabs: document.getElementById("ruleSubtabs"),
+    countBadges: Array.prototype.slice.call(document.querySelectorAll(".tab-count")),
+    searchPanel: document.querySelector(".search-panel"),
+    searchResultsBlock: document.getElementById("searchResultsBlock"),
+    searchResultsTitle: document.getElementById("searchResultsTitle"),
+    searchResults: document.getElementById("searchResults"),
+    overviewBody: document.getElementById("overviewBody"),
+    overviewToggle: document.getElementById("overviewToggle"),
     results: document.getElementById("results"),
     resultTitle: document.getElementById("resultTitle"),
     resultMeta: document.getElementById("resultMeta"),
     ruleCount: document.getElementById("ruleCount"),
-    pendingCount: document.getElementById("pendingCount"),
     pageCount: document.getElementById("pageCount"),
     designInfoPanel: document.getElementById("designInfoPanel")
   };
@@ -471,19 +480,26 @@
     return bigramCoverage >= 0.6 && score >= 45;
   }
 
-  function getItems() {
-    var items = state.view === "rules" ? data.rules : state.view === "pending" ? data.pending : data.pages;
-    var query = state.query.trim();
+  function getSourceItems(view) {
+    return view === "rules" ? data.rules : view === "pending" ? data.pending : data.pages;
+  }
 
+  function getOverviewEntriesForView(view) {
+    var items = getSourceItems(view);
+    return items.map(function (item, index) {
+      return { item: item, score: items.length - index };
+    });
+  }
+
+  function getSearchEntriesForView(view) {
+    var query = state.query.trim();
     if (!query) {
-      return items.map(function (item, index) {
-        return { item: item, score: items.length - index };
-      });
+      return [];
     }
 
-    return items
+    return getSourceItems(view)
       .map(function (item) {
-        return { item: item, score: scoreItem(item, query, state.view) };
+        return { item: item, score: scoreItem(item, query, view) };
       })
       .filter(function (entry) {
         return entry.score > 0;
@@ -493,13 +509,64 @@
       });
   }
 
+  function getItems() {
+    return getOverviewEntriesForView(state.view);
+  }
+
+  function getSearchEntries() {
+    var views = ["pages", "rules", "pending"];
+    var orderWeight = {
+      pages: 3000,
+      rules: 2000,
+      pending: 1000
+    };
+
+    if (!state.query.trim()) {
+      return [];
+    }
+
+    return views.reduce(function (all, view) {
+      return all.concat(getSearchEntriesForView(view).map(function (entry) {
+        return {
+          item: entry.item,
+          score: entry.score + orderWeight[view],
+          view: view
+        };
+      }));
+    }, []).sort(function (a, b) {
+      return b.score - a.score || a.item.id.localeCompare(b.item.id);
+    });
+  }
+
+  function getCountForView(view) {
+    return getSourceItems(view).length;
+  }
+
+  function updateTabCounts() {
+    var counts = {
+      pages: getCountForView("pages"),
+      rules: getCountForView("rules"),
+      pending: getCountForView("pending")
+    };
+    counts["rules-overview"] = counts.rules + counts.pending;
+
+    els.countBadges.forEach(function (badge) {
+      var key = badge.getAttribute("data-count-for");
+      badge.textContent = String(counts[key] || 0);
+    });
+  }
+
   function renderRule(rule) {
     var isPending = rule.status === "pending";
+    var statusLabel = isPending ? "待确定" : "已确定";
     return [
       '<article class="card' + (isPending ? " pending-card" : "") + '">',
       '  <div class="card-head">',
       '    <h3>' + escapeHtml(rule.title) + "</h3>",
-      '    <span class="badge">' + escapeHtml(rule.id) + "</span>",
+      '    <div class="badge-group">',
+      '      <span class="status-badge' + (isPending ? " pending-status-badge" : "") + '">' + statusLabel + "</span>",
+      '      <span class="badge">' + escapeHtml(rule.id) + "</span>",
+      "    </div>",
       "  </div>",
       '  <div class="field"><span class="field-label">类型</span><p>' + escapeHtml(rule.kind) + "</p></div>",
       isPending ? '  <div class="pending-notice">' + escapeHtml(data.pendingMessage) + "</div>" : "",
@@ -512,43 +579,64 @@
     return [
       '<article class="card">',
       '  <div class="card-head">',
-      '    <h3>' + escapeHtml(page.name) + "</h3>",
+      '    <h3><a class="page-title-link" href="' + escapeHtml(page.pixsoUrl) + '" target="_blank" rel="noopener noreferrer"><span class="link-icon" aria-hidden="true">↗</span>' + escapeHtml(page.name) + "</a></h3>",
       '    <span class="badge type">' + escapeHtml(page.id) + "</span>",
       "  </div>",
       '  <div class="field"><span class="field-label">页面类型</span><p>' + escapeHtml(page.type) + "</p></div>",
       '  <div class="field"><span class="field-label">主要内容</span>' + listHtml(page.contents, false) + "</div>",
-      '  <div class="page-actions">',
-      '    <a class="pixso-link" href="' + escapeHtml(page.pixsoUrl) + '" target="_blank" rel="noopener noreferrer">查看 Pixso</a>',
-      '    <span class="status">当前状态：' + escapeHtml(page.status) + "</span>",
-      "  </div>",
       "</article>"
     ].join("");
   }
 
   function render() {
-    var entries = getItems();
+    var overviewEntries = getItems();
+    var searchEntries = getSearchEntries();
     var isRuleLike = state.view === "rules" || state.view === "pending";
-    var query = state.query.trim();
-    var total = state.view === "rules" ? data.rules.length : state.view === "pending" ? data.pending.length : data.pages.length;
-    var label = state.view === "rules" ? "已确认" : state.view === "pending" ? "待确认" : "流程及设计地址";
+    var hasQuery = Boolean(state.query.trim());
+
+    updateTabCounts();
+    els.searchPanel.classList.toggle("has-query", hasQuery);
+    els.clearSearch.hidden = !hasQuery;
+    els.searchResultsBlock.hidden = !hasQuery;
+    els.overviewBody.hidden = !state.overviewExpanded;
+    els.overviewToggle.classList.toggle("is-expanded", state.overviewExpanded);
+    els.overviewToggle.setAttribute("aria-expanded", state.overviewExpanded ? "true" : "false");
+    els.overviewToggle.setAttribute("aria-label", (state.overviewExpanded ? "收起" : "展开") + "索引与逻辑概览");
 
     els.tabs.forEach(function (tab) {
-      var active = tab.getAttribute("data-view") === state.view;
+      var tabView = tab.getAttribute("data-view");
+      var active = tabView === state.view || (tabView === "rules-overview" && isRuleLike);
       tab.classList.toggle("is-active", active);
       tab.setAttribute("aria-selected", active ? "true" : "false");
     });
 
-    els.resultTitle.textContent = query ? "搜索结果" : "全部" + label;
-    els.resultMeta.textContent = query
-      ? "在" + label + "中找到 " + entries.length + " 条匹配内容。"
-      : "共 " + total + " 条" + label + "。";
+    els.ruleSubtabs.hidden = !isRuleLike;
+    els.ruleTabs.forEach(function (tab) {
+      var active = tab.getAttribute("data-rule-view") === state.view;
+      tab.classList.toggle("is-active", active);
+      tab.setAttribute("aria-selected", active ? "true" : "false");
+    });
 
-    if (entries.length === 0) {
+    els.resultTitle.textContent = "索引与逻辑概览";
+    els.resultMeta.textContent = "";
+    els.searchResultsTitle.textContent = "查询结果 " + searchEntries.length + "条";
+    els.results.innerHTML = "";
+    els.searchResults.innerHTML = "";
+
+    if (hasQuery) {
+      els.searchResults.innerHTML = searchEntries.length
+        ? searchEntries.map(function (entry) {
+            return entry.view === "pages" ? renderPage(entry.item) : renderRule(entry.item);
+          }).join("")
+        : '<div class="empty">' + escapeHtml(data.emptyMessage) + "</div>";
+    }
+
+    if (overviewEntries.length === 0) {
       els.results.innerHTML = '<div class="empty">' + escapeHtml(data.emptyMessage) + "</div>";
       return;
     }
 
-    els.results.innerHTML = entries.map(function (entry) {
+    els.results.innerHTML = overviewEntries.map(function (entry) {
       return isRuleLike ? renderRule(entry.item) : renderPage(entry.item);
     }).join("");
   }
@@ -566,9 +654,22 @@
       render();
     });
 
+    els.overviewToggle.addEventListener("click", function () {
+      state.overviewExpanded = !state.overviewExpanded;
+      render();
+    });
+
     els.tabs.forEach(function (tab) {
       tab.addEventListener("click", function () {
-        state.view = tab.getAttribute("data-view");
+        var view = tab.getAttribute("data-view");
+        state.view = view === "rules-overview" ? "rules" : view;
+        render();
+      });
+    });
+
+    els.ruleTabs.forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        state.view = tab.getAttribute("data-rule-view");
         render();
       });
     });
@@ -576,7 +677,6 @@
 
   function init() {
     els.ruleCount.textContent = data.rules.length;
-    els.pendingCount.textContent = data.pending.length;
     els.pageCount.textContent = data.pages.length;
     renderDesignInfo();
     bindEvents();
