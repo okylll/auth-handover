@@ -11,9 +11,11 @@ from pathlib import Path
 
 
 EMPTY_MESSAGE = "现有交接资料中没有相关记录，无法根据已有规则判断。"
-PENDING_MARKERS = ("待确认", "二次授权", "尚未最终确认")
 DEFAULT_RULES_TARGET = Path(".agents/skills/skill-auth/references/逻辑规则.md")
 DEFAULT_PAGES_TARGET = Path(".agents/skills/skill-auth/references/页面索引.md")
+CONFIRMED_PREFIXES = ("L", "I")
+PENDING_PREFIX = "P"
+DESIGN_NOTES_TITLE = "# 四、设计稿维护说明"
 
 
 class SyncError(Exception):
@@ -27,14 +29,19 @@ def read_text(path: Path) -> str:
         raise SyncError(f"无法读取源文件：{path}") from exc
 
 
-def is_pending_fragment(text: str) -> bool:
-    return any(marker in text for marker in PENDING_MARKERS)
-
-
 def strip_inline_markdown(text: str) -> str:
     text = text.strip()
     text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", text)
     text = text.replace("**", "")
+    return text.strip()
+
+
+def markdown_to_text(text: str) -> str:
+    text = re.sub(r"```.*?```", " ", text, flags=re.S)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 \2", text)
+    text = re.sub(r"[*_#>`|:-]+", " ", text)
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
@@ -48,20 +55,7 @@ def add_public_text(text: str, items: list[str], section_id: str, excluded: list
     if not text:
         return
 
-    if not is_pending_fragment(text):
-        items.append(text)
-        return
-
-    kept_parts = []
-    for sentence in split_sentences(text):
-        if is_pending_fragment(sentence):
-            excluded.append(f"{section_id}: {sentence}")
-        elif sentence:
-            kept_parts.append(sentence)
-
-    kept = "".join(kept_parts).strip()
-    if kept:
-        items.append(kept)
+    items.append(text)
 
 
 def split_numbered_sections(text: str, prefix: str) -> list[tuple[str, str, str]]:
@@ -74,6 +68,71 @@ def split_numbered_sections(text: str, prefix: str) -> list[tuple[str, str, str]
     for index, match in enumerate(matches):
         next_start = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         sections.append((match.group(1), match.group(2).strip(), text[match.end():next_start]))
+    return sections
+
+
+def clean_rule_body(body: str) -> str:
+    body = body.strip()
+    body = re.sub(r"\n---\s*$", "", body).strip()
+    return body
+
+
+def split_design_notes(text: str) -> tuple[str, str]:
+    marker = "\n" + DESIGN_NOTES_TITLE
+    if marker not in text:
+        return text, ""
+    main, design = text.split(marker, 1)
+    return main.rstrip() + "\n", DESIGN_NOTES_TITLE + design
+
+
+def parse_design_notes(design_text: str) -> list[dict[str, str]]:
+    pattern = re.compile(r"^##\s+\d+\.\s*(.+?)\s*$", re.MULTILINE)
+    matches = list(pattern.finditer(design_text))
+    notes = []
+
+    for index, match in enumerate(matches):
+        title = strip_inline_markdown(match.group(1))
+        next_start = matches[index + 1].start() if index + 1 < len(matches) else len(design_text)
+        body = clean_rule_body(design_text[match.end():next_start])
+        if "父用户组共有权限" in title:
+            continue
+        notes.append({
+            "title": title,
+            "bodyMarkdown": body,
+            "bodyText": markdown_to_text(body),
+        })
+
+    return notes
+
+
+def filter_design_notes(design_text: str) -> str:
+    notes = parse_design_notes(design_text)
+    if not notes:
+        return ""
+
+    parts = [DESIGN_NOTES_TITLE, ""]
+    for index, note in enumerate(notes, 1):
+        parts.extend([
+            f"## {index}. {note['title']}",
+            "",
+            note["bodyMarkdown"],
+            "",
+            "---",
+            "",
+        ])
+    return "\n".join(parts).rstrip() + "\n"
+
+
+def split_rule_sections(text: str) -> list[tuple[str, str, str]]:
+    pattern = re.compile(r"^(#{2,3})\s+([LIP]-\d{3})[｜|]\s*(.+?)\s*$", re.MULTILINE)
+    matches = list(pattern.finditer(text))
+    if not matches:
+        raise SyncError("没有找到 L/I/P 规则区块")
+
+    sections = []
+    for index, match in enumerate(matches):
+        next_start = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        sections.append((match.group(2), match.group(3).strip(), clean_rule_body(text[match.end():next_start])))
     return sections
 
 
@@ -142,40 +201,27 @@ def parse_sources(raw: str, section_id: str) -> list[str]:
 
 
 def parse_rules(text: str, excluded: list[str]) -> list[dict[str, object]]:
-    rules = []
+    rules: list[dict[str, object]] = []
 
-    for rule_id, title, body in split_numbered_sections(text, "RULE"):
-        if is_pending_fragment(title):
-            excluded.append(f"{rule_id}: {title}")
-            continue
-
-        blocks = extract_bold_blocks(body, rule_id)
-        required = ("问题", "结论", "来源")
-        missing = [label for label in required if label not in blocks]
-        if missing:
-            raise SyncError(f"{rule_id} 缺少字段：{', '.join(missing)}")
-
-        question_items = parse_content_items(blocks["问题"], rule_id, excluded)
-        conclusion = parse_content_items(blocks["结论"], rule_id, excluded)
-        notes = parse_content_items(blocks.get("说明", ""), rule_id, excluded)
-        sources = parse_sources(blocks["来源"], rule_id)
-
-        if len(question_items) != 1:
-            raise SyncError(f"{rule_id} 的问题字段应解析为 1 条，实际为 {len(question_items)} 条")
-        if not conclusion:
-            raise SyncError(f"{rule_id} 的结论在过滤后为空")
+    for rule_id, title, body in split_rule_sections(text):
+        prefix = rule_id.split("-", 1)[0]
+        kind = {
+            "L": "逻辑规则",
+            "I": "交互规则",
+            "P": "待确认事项",
+        }[prefix]
 
         rules.append({
             "id": rule_id,
             "title": strip_inline_markdown(title),
-            "question": question_items[0],
-            "conclusion": conclusion,
-            "notes": notes,
-            "sources": sources,
+            "kind": kind,
+            "status": "pending" if prefix == PENDING_PREFIX else "confirmed",
+            "bodyMarkdown": body,
+            "bodyText": markdown_to_text(body),
         })
 
     if not rules:
-        raise SyncError("没有导入任何 RULE")
+        raise SyncError("没有导入任何 L/I/P 规则")
     return rules
 
 
@@ -235,10 +281,6 @@ def parse_pages(text: str, excluded: list[str]) -> list[dict[str, object]]:
     pages = []
 
     for page_id, title, body in split_numbered_sections(text, "PAGE"):
-        if is_pending_fragment(title):
-            excluded.append(f"{page_id}: {title}")
-            continue
-
         fields = parse_top_level_fields(body, page_id)
         required = ("页面名称", "页面类型", "查询关键词", "主要内容", "Pixso 地址", "状态")
         missing = [field for field in required if field not in fields or not fields[field].strip()]
@@ -246,19 +288,15 @@ def parse_pages(text: str, excluded: list[str]) -> list[dict[str, object]]:
             raise SyncError(f"{page_id} 缺少字段：{', '.join(missing)}")
 
         status = strip_inline_markdown(fields["状态"])
-        if is_pending_fragment(status):
-            excluded.append(f"{page_id} 状态: {status}")
-            continue
-
         pages.append({
             "id": page_id,
-            "name": strip_inline_markdown(fields["页面名称"]),
+            "name": strip_page_warning(strip_inline_markdown(fields["页面名称"])),
             "directory": strip_inline_markdown(fields.get("所属目录", "")),
             "type": strip_inline_markdown(fields["页面类型"]),
             "keywords": parse_keywords(fields["查询关键词"], page_id),
             "contents": parse_nested_bullets(fields["主要内容"], page_id, "主要内容", excluded),
             "status": status,
-            "pixsoPosition": strip_inline_markdown(fields.get("Pixso 位置", "")),
+            "pixsoPosition": strip_page_warning(strip_inline_markdown(fields.get("Pixso 位置", ""))),
             "pixsoUrl": parse_pixso_url(fields["Pixso 地址"], page_id),
         })
 
@@ -267,11 +305,21 @@ def parse_pages(text: str, excluded: list[str]) -> list[dict[str, object]]:
     return pages
 
 
-def generate_data_js(rules: list[dict[str, object]], pages: list[dict[str, object]]) -> str:
+def strip_page_warning(text: str) -> str:
+    text = text.replace("‼️", "").replace("‼", "")
+    return re.sub(r"^[!！\s]+", "", text).strip()
+
+
+def generate_data_js(rules: list[dict[str, object]], pages: list[dict[str, object]], design_notes: list[dict[str, str]]) -> str:
+    confirmed_rules = [rule for rule in rules if rule["status"] == "confirmed"]
+    pending_rules = [rule for rule in rules if rule["status"] == "pending"]
     payload = {
-        "rules": rules,
+        "rules": confirmed_rules,
+        "pending": pending_rules,
         "pages": pages,
+        "designNotes": design_notes,
         "emptyMessage": EMPTY_MESSAGE,
+        "pendingMessage": "待确认，不作为当前现行规则。",
     }
     json_payload = json.dumps(payload, ensure_ascii=False, indent=2)
     return (
@@ -282,61 +330,6 @@ def generate_data_js(rules: list[dict[str, object]], pages: list[dict[str, objec
 
 def markdown_list(items: list[str], indent: str = "") -> str:
     return "\n".join(f"{indent}- {item}" for item in items)
-
-
-def generate_rules_markdown(rules: list[dict[str, object]]) -> str:
-    parts = [
-        "# 逻辑规则",
-        "",
-        "本文件由 `scripts/sync_data.py` 根据允许公开的同步结果生成。",
-        "只包含公开交接资料。",
-        "",
-        f"未命中规则时固定回答：{EMPTY_MESSAGE}",
-        "",
-        "## 使用原则",
-        "",
-        "- 只根据本文件已有 RULE 回答权限逻辑问题。",
-        "- 可以组合多条已确认规则回答比较或关联问题。",
-        "- 不得根据行业常识、相似功能、页面漏改文案或个人推断补充项目结论。",
-        "- 用户组本身不支持限制，只支持授予和回收。",
-        "- 角色只有授予和回收，没有限制。",
-        "- 稿件中的“岗位”统一理解为角色下的动态模板。",
-        "",
-    ]
-
-    for rule in rules:
-        parts.extend([
-            f"## {rule['id']} {rule['title']}",
-            "",
-            "**问题**",
-            "",
-            str(rule["question"]),
-            "",
-            "**结论**",
-            "",
-            markdown_list(rule["conclusion"]),  # type: ignore[arg-type]
-            "",
-        ])
-
-        notes = rule["notes"]
-        if notes:
-            parts.extend([
-                "**必要说明**",
-                "",
-                markdown_list(notes),  # type: ignore[arg-type]
-                "",
-            ])
-
-        parts.extend([
-            "**RULE 来源**",
-            "",
-            markdown_list(rule["sources"]),  # type: ignore[arg-type]
-            "",
-            "---",
-            "",
-        ])
-
-    return "\n".join(parts).rstrip() + "\n"
 
 
 def generate_pages_markdown(pages: list[dict[str, object]]) -> str:
@@ -406,11 +399,17 @@ def main() -> int:
     try:
         rules_text = read_text(rules_path)
         pages_text = read_text(pages_path)
-        rules = parse_rules(rules_text, excluded)
+        rule_main_text, design_text = split_design_notes(rules_text)
+        design_notes = parse_design_notes(design_text)
+        public_rules_text = rule_main_text
+        filtered_design_text = filter_design_notes(design_text)
+        if filtered_design_text:
+            public_rules_text = public_rules_text.rstrip() + "\n\n" + filtered_design_text
+        rules = parse_rules(rule_main_text, excluded)
         pages = parse_pages(pages_text, excluded)
-        write_generated_file(data_target, generate_data_js(rules, pages))
-        write_generated_file(rules_target, generate_rules_markdown(rules))
-        write_generated_file(pages_target, generate_pages_markdown(pages))
+        write_generated_file(data_target, generate_data_js(rules, pages, design_notes))
+        write_generated_file(rules_target, public_rules_text)
+        write_generated_file(pages_target, pages_text)
     except SyncError as exc:
         print(f"同步失败：{exc}", file=sys.stderr)
         return 1
@@ -418,9 +417,12 @@ def main() -> int:
         print(f"同步失败：无法写入目标文件 ({exc})", file=sys.stderr)
         return 1
 
-    print(f"导入的规则数量：{len(rules)}")
+    confirmed_count = sum(1 for rule in rules if rule["status"] == "confirmed")
+    pending_count = sum(1 for rule in rules if rule["status"] == "pending")
+    print(f"导入的已确认规则数量：{confirmed_count}")
+    print(f"导入的待确认事项数量：{pending_count}")
     print(f"导入的页面数量：{len(pages)}")
-    print("被排除的待确认内容：")
+    print("被排除的内容：")
     if excluded:
         for item in excluded:
             print(f"- {item}")

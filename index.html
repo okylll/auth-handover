@@ -12,8 +12,14 @@
         <div>
           <p class="eyebrow">离职交接资料</p>
           <h1>用户与权限管理交接知识库</h1>
-          <p class="intro">整理已确认的权限规则、流程页面和 Pixso 索引，提供快速查询能力。</p>
-          <div class="hero-advanced" aria-label="Codex 进阶使用说明">
+          <p class="intro">
+            整理已确认的权限规则、流程页面和 Pixso 索引，提供快速查询能力。
+            <span class="design-info" id="designInfo" tabindex="0" aria-label="设计稿维护说明">
+              <span class="design-info-icon" aria-hidden="true">i</span>
+              <span class="design-info-panel" id="designInfoPanel"></span>
+            </span>
+          </p>
+          <div class="hero-advanced" aria-label="Codex 进阶查询">
             <p class="hero-advanced-label">权限Skill - Codex 进阶版</p>
             <p class="hero-advanced-copy">网站提供快速静态搜索，Codex拥有更机智的大脑，回答更复杂的问题</p>
             <div class="hero-advanced-actions">
@@ -24,12 +30,16 @@
         </div>
         <div class="stats" aria-label="资料统计">
           <div>
-            <strong id="ruleCount">0</strong>
-            <span>权限规则</span>
+            <strong id="pageCount">0</strong>
+            <span>主流程</span>
           </div>
           <div>
-            <strong id="pageCount">0</strong>
-            <span>流程索引</span>
+            <strong id="ruleCount">0</strong>
+            <span>已有规则</span>
+          </div>
+          <div>
+            <strong id="pendingCount">0</strong>
+            <span>待确认事项</span>
           </div>
         </div>
       </div>
@@ -46,8 +56,9 @@
       </section>
 
       <nav class="tabs" aria-label="内容分类">
-        <button class="tab is-active" type="button" data-view="rules">权限规则</button>
-        <button class="tab" type="button" data-view="pages">流程索引</button>
+        <button class="tab is-active" type="button" data-view="pages">流程及设计地址</button>
+        <button class="tab" type="button" data-view="rules">已确认</button>
+        <button class="tab" type="button" data-view="pending">待确认</button>
       </nav>
 
       <section class="result-head" aria-live="polite">

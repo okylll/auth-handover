@@ -3,6 +3,7 @@
 
   var GUIDE_PATH = "./docs/CODEX-USER-GUIDE.md";
   var contentEl = document.getElementById("guideContent");
+  var fallbackEl = document.getElementById("guideMarkdown");
 
   function escapeHtml(value) {
     return String(value || "")
@@ -138,6 +139,10 @@
     return html.join("");
   }
 
+  function prepareMarkdown(markdown) {
+    return String(markdown || "").replace(/^#\s+.+(?:\r?\n)+/, "");
+  }
+
   fetch(GUIDE_PATH)
     .then(function (response) {
       if (!response.ok) {
@@ -146,9 +151,13 @@
       return response.text();
     })
     .then(function (markdown) {
-      contentEl.innerHTML = renderMarkdown(markdown);
+      contentEl.innerHTML = renderMarkdown(prepareMarkdown(markdown));
     })
     .catch(function () {
+      if (fallbackEl && fallbackEl.textContent.trim()) {
+        contentEl.innerHTML = renderMarkdown(prepareMarkdown(fallbackEl.textContent));
+        return;
+      }
       contentEl.innerHTML = '<p class="guide-error">使用手册加载失败，请返回知识库后重试。</p>';
     });
 }());

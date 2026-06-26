@@ -3,7 +3,7 @@
 
   var data = window.AUTH_HANDOVER_DATA;
   var state = {
-    view: "rules",
+    view: "pages",
     query: ""
   };
 
@@ -15,7 +15,9 @@
     resultTitle: document.getElementById("resultTitle"),
     resultMeta: document.getElementById("resultMeta"),
     ruleCount: document.getElementById("ruleCount"),
-    pageCount: document.getElementById("pageCount")
+    pendingCount: document.getElementById("pendingCount"),
+    pageCount: document.getElementById("pageCount"),
+    designInfoPanel: document.getElementById("designInfoPanel")
   };
 
   var STOP_WORDS = [
@@ -41,6 +43,8 @@
     "动态模板",
     "静态模板",
     "用户组",
+    "父用户组",
+    "子用户组",
     "区域授权",
     "选点授权",
     "导入授权",
@@ -55,6 +59,9 @@
     "授予",
     "继承",
     "审计",
+    "最终操作优先",
+    "待确认",
+    "点位",
     "配置",
     "流程",
     "页面",
@@ -171,6 +178,197 @@
     }).join("") + "</div>";
   }
 
+  function renderDesignInfo() {
+    if (!els.designInfoPanel || !data.designNotes || !data.designNotes.length) {
+      return;
+    }
+
+    els.designInfoPanel.innerHTML = [
+      '<strong class="design-info-title">设计稿维护说明</strong>',
+      data.designNotes.map(function (note) {
+        return [
+          '<span class="design-info-item">',
+          '  <strong>' + escapeHtml(note.title) + "</strong>",
+          '  <span class="design-info-copy">' + renderMarkdown(note.bodyMarkdown) + "</span>",
+          "</span>"
+        ].join("");
+      }).join("")
+    ].join("");
+  }
+
+  function paragraphHtml(lines) {
+    if (!lines.length) {
+      return "";
+    }
+    return "<p>" + lines.map(renderInlineMarkdown).join("<br>") + "</p>";
+  }
+
+  function renderInlineMarkdown(value) {
+    var tokens = [];
+    var text = escapeHtml(value).replace(/`([^`]+)`/g, function (_, code) {
+      var token = "\u0000CODE" + tokens.length + "\u0000";
+      tokens.push("<code>" + code + "</code>");
+      return token;
+    });
+
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_, label, href) {
+      return '<a href="' + escapeHtml(href) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(label) + "</a>";
+    });
+    text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+
+    tokens.forEach(function (html, index) {
+      text = text.replace("\u0000CODE" + index + "\u0000", html);
+    });
+
+    return text;
+  }
+
+  function renderTable(lines) {
+    var rows = lines
+      .map(function (line) {
+        return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(function (cell) {
+          return cell.trim();
+        });
+      })
+      .filter(function (row) {
+        return !row.every(function (cell) {
+          return /^:?-{2,}:?$/.test(cell);
+        });
+      });
+
+    if (!rows.length) {
+      return "";
+    }
+
+    return '<div class="markdown-table-wrap"><table class="markdown-table"><tbody>' + rows.map(function (row, index) {
+      var tag = index === 0 ? "th" : "td";
+      return "<tr>" + row.map(function (cell) {
+        return "<" + tag + ">" + renderInlineMarkdown(cell) + "</" + tag + ">";
+      }).join("") + "</tr>";
+    }).join("") + "</tbody></table></div>";
+  }
+
+  function renderMarkdown(markdown) {
+    var html = [];
+    var paragraph = [];
+    var list = null;
+    var quote = [];
+    var table = [];
+    var code = [];
+    var inCode = false;
+
+    function flushParagraph() {
+      if (paragraph.length) {
+        html.push(paragraphHtml(paragraph));
+        paragraph = [];
+      }
+    }
+
+    function flushList() {
+      if (list) {
+        html.push("<" + list.type + ">" + list.items.map(function (item) {
+          return "<li>" + renderInlineMarkdown(item) + "</li>";
+        }).join("") + "</" + list.type + ">");
+        list = null;
+      }
+    }
+
+    function flushQuote() {
+      if (quote.length) {
+        html.push("<blockquote>" + paragraphHtml(quote) + "</blockquote>");
+        quote = [];
+      }
+    }
+
+    function flushTable() {
+      if (table.length) {
+        html.push(renderTable(table));
+        table = [];
+      }
+    }
+
+    function flushCode() {
+      if (code.length) {
+        html.push("<pre><code>" + escapeHtml(code.join("\n")) + "</code></pre>");
+        code = [];
+      }
+    }
+
+    String(markdown || "").replace(/\r\n?/g, "\n").split("\n").forEach(function (line) {
+      var trimmed = line.trim();
+      var listMatch;
+
+      if (/^```/.test(trimmed)) {
+        if (inCode) {
+          flushCode();
+          inCode = false;
+        } else {
+          flushParagraph();
+          flushList();
+          flushQuote();
+          flushTable();
+          inCode = true;
+        }
+        return;
+      }
+
+      if (inCode) {
+        code.push(line);
+        return;
+      }
+
+      if (!trimmed) {
+        flushParagraph();
+        flushList();
+        flushQuote();
+        flushTable();
+        return;
+      }
+
+      if (/^\|.+\|$/.test(trimmed)) {
+        flushParagraph();
+        flushList();
+        flushQuote();
+        table.push(trimmed);
+        return;
+      }
+
+      if (/^>\s+/.test(trimmed)) {
+        flushParagraph();
+        flushList();
+        flushTable();
+        quote.push(trimmed.replace(/^>\s+/, ""));
+        return;
+      }
+
+      listMatch = /^([-*+]|\d+\.)\s+(.+)$/.exec(trimmed);
+      if (listMatch) {
+        var type = /\d+\./.test(listMatch[1]) ? "ol" : "ul";
+        flushParagraph();
+        flushQuote();
+        flushTable();
+        if (!list || list.type !== type) {
+          flushList();
+          list = { type: type, items: [] };
+        }
+        list.items.push(listMatch[2]);
+        return;
+      }
+
+      flushList();
+      flushQuote();
+      flushTable();
+      paragraph.push(trimmed);
+    });
+
+    flushCode();
+    flushParagraph();
+    flushList();
+    flushQuote();
+    flushTable();
+    return html.join("");
+  }
+
   function scoreItem(item, query, type) {
     if (!query) {
       return 1;
@@ -178,15 +376,12 @@
 
     var queryAnalysis = analyzeText(query);
     var score = 0;
-    var fields = type === "rules"
+    var fields = type === "rules" || type === "pending"
       ? [
           { value: item.id, weight: 40 },
           { value: item.title, weight: 58 },
-          { value: item.question, weight: 64 },
-          { value: item.conclusion.join(" "), weight: 28 },
-          { value: item.notes.join(" "), weight: 18 },
-          { value: (item.keywords || []).join(" "), weight: 24 },
-          { value: item.sources.join(" "), weight: 12 }
+          { value: item.kind, weight: 18 },
+          { value: item.bodyText || item.bodyMarkdown || "", weight: 42 }
         ]
       : [
           { value: item.id, weight: 40 },
@@ -225,15 +420,13 @@
   }
 
   function getSearchableText(item, type) {
-    if (type === "rules") {
+    if (type === "rules" || type === "pending") {
       return [
         item.id,
         item.title,
-        item.question,
-        item.conclusion.join(" "),
-        item.notes.join(" "),
-        (item.keywords || []).join(" "),
-        item.sources.join(" ")
+        item.kind,
+        item.bodyText || "",
+        item.bodyMarkdown || ""
       ].join(" ");
     }
 
@@ -279,7 +472,7 @@
   }
 
   function getItems() {
-    var items = state.view === "rules" ? data.rules : data.pages;
+    var items = state.view === "rules" ? data.rules : state.view === "pending" ? data.pending : data.pages;
     var query = state.query.trim();
 
     if (!query) {
@@ -301,15 +494,16 @@
   }
 
   function renderRule(rule) {
+    var isPending = rule.status === "pending";
     return [
-      '<article class="card">',
+      '<article class="card' + (isPending ? " pending-card" : "") + '">',
       '  <div class="card-head">',
-      '    <h3>' + escapeHtml(rule.question) + "</h3>",
+      '    <h3>' + escapeHtml(rule.title) + "</h3>",
       '    <span class="badge">' + escapeHtml(rule.id) + "</span>",
       "  </div>",
-      '  <div class="field"><span class="field-label">结论</span>' + listHtml(rule.conclusion, false) + "</div>",
-      rule.notes.length ? '  <div class="field"><span class="field-label">必要说明</span>' + listHtml(rule.notes, false) + "</div>" : "",
-      '  <div class="field"><span class="field-label">来源页面</span>' + chipList(rule.sources) + "</div>",
+      '  <div class="field"><span class="field-label">类型</span><p>' + escapeHtml(rule.kind) + "</p></div>",
+      isPending ? '  <div class="pending-notice">' + escapeHtml(data.pendingMessage) + "</div>" : "",
+      '  <div class="field markdown-body"><span class="field-label">正文</span>' + renderMarkdown(rule.bodyMarkdown) + "</div>",
       "</article>"
     ].join("");
   }
@@ -333,10 +527,10 @@
 
   function render() {
     var entries = getItems();
-    var isRules = state.view === "rules";
+    var isRuleLike = state.view === "rules" || state.view === "pending";
     var query = state.query.trim();
-    var total = isRules ? data.rules.length : data.pages.length;
-    var label = isRules ? "权限规则" : "流程索引";
+    var total = state.view === "rules" ? data.rules.length : state.view === "pending" ? data.pending.length : data.pages.length;
+    var label = state.view === "rules" ? "已确认" : state.view === "pending" ? "待确认" : "流程及设计地址";
 
     els.tabs.forEach(function (tab) {
       var active = tab.getAttribute("data-view") === state.view;
@@ -355,7 +549,7 @@
     }
 
     els.results.innerHTML = entries.map(function (entry) {
-      return isRules ? renderRule(entry.item) : renderPage(entry.item);
+      return isRuleLike ? renderRule(entry.item) : renderPage(entry.item);
     }).join("");
   }
 
@@ -382,7 +576,9 @@
 
   function init() {
     els.ruleCount.textContent = data.rules.length;
+    els.pendingCount.textContent = data.pending.length;
     els.pageCount.textContent = data.pages.length;
+    renderDesignInfo();
     bindEvents();
     render();
   }
